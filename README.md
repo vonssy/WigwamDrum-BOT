@@ -1,7 +1,7 @@
-# Wigman Drum BOT
-Wigman Drum BOT - Added Soon
+# Wigwam Drum BOT
+Wigwam Drum BOT - Added Soon
 
-Register Here : [Wigman Drum](https://t.me/drumtap_bot?start=1716917987706015)
+Register Here : [Wigwam Drum](https://t.me/drumtap_bot?start=1716917987706015)
 
 ## Fitur
 
