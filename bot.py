@@ -297,17 +297,24 @@ class WigwamDrum:
             available_taps = user_info['availableTaps']
 
             if available_taps > 0:
-                print(
-                    f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA + Style.BRIGHT}[ Tap Tap{Style.RESET_ALL}"
-                    f"{Fore.GREEN + Style.BRIGHT} Is Started {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA + Style.BRIGHT}] [ Wait{Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT} {available_taps} Seconds... {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}",
-                    end="\r",
-                    flush=True
+                self.log(
+                    f"{Fore.MAGENTA+Style.BRIGHT}[ Tap Tap{Style.RESET_ALL}"
+                    f"{Fore.GREEN+Style.BRIGHT} Is Started {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                 )
+
+                for remaining in range(available_taps, 0, -1):
+                    print(
+                        f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT}[ Wait for{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} {remaining} {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}Seconds to Claim Reward{Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}   ",
+                        end="\r",
+                        flush=True
+                    )
+                    time.sleep(1)
 
                 total_amount = 0
 
@@ -329,7 +336,7 @@ class WigwamDrum:
                         f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
                         f"{Fore.MAGENTA+Style.BRIGHT}] [ Reward{Style.RESET_ALL}"
                         f"{Fore.WHITE+Style.BRIGHT} {total_amount} Points {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                        f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}          "
                     )
             else:
                 self.log(
