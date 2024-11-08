@@ -78,21 +78,6 @@ class WigwamDrum:
         else:
             return None
         
-    def set_email(self, query: str, user_id: str, email: str):
-        url = 'https://drumapi.wigwam.app/api/setEmail'
-        data = json.dumps({"authData":query, "data":{"email":email}, "devAuthData":user_id})
-        self.headers.update({
-            'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        response.raise_for_status()
-        status = response.json()
-        if status['status']:
-            return status['data']
-        else:
-            return None
-        
     def start_farm(self, query: str, user_id: str):
         url = 'https://drumapi.wigwam.app/api/gameplay/startFarm'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
@@ -318,7 +303,7 @@ class WigwamDrum:
                     f"{Fore.MAGENTA + Style.BRIGHT}[ Tap Tap{Style.RESET_ALL}"
                     f"{Fore.GREEN + Style.BRIGHT} Is Started {Style.RESET_ALL}"
                     f"{Fore.MAGENTA + Style.BRIGHT}] [ Wait{Style.RESET_ALL}"
-                    f"{Fore.WHITE + Style.BRIGHT} 1 Minutes... {Style.RESET_ALL}"
+                    f"{Fore.WHITE + Style.BRIGHT} {available_taps} Seconds... {Style.RESET_ALL}"
                     f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}",
                     end="\r",
                     flush=True
@@ -355,10 +340,12 @@ class WigwamDrum:
             time.sleep(1)
 
             tasks = user_info['tasks']
-            completed = False
             if tasks:
                 for task_id, task_info in tasks.items():
                     status_task = task_info['state']
+
+                    if task_id == "watch_adsgram":
+                        continue
 
                     if status_task == "NONE":
                         start = self.start_tasks(query, user_id, task_id)
@@ -465,17 +452,19 @@ class WigwamDrum:
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
 
-                    else:
-                        completed = True
-                if completed:
-                    self.log(f"{Fore.GREEN + Style.BRIGHT}[ All Tasks Is Completed ]{Style.RESET_ALL}")
-
             else:
-                self.log(f"{Fore.RED+Style.BRIGHT}[ Failed to Get Tasks Info ]{Style.RESET_ALL}")
-            time.sleep(1)
-
+                self.log(
+                    f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
+                    f"{Fore.RED + Style.BRIGHT} Data Is None {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                )
         else:
-            self.log(f"{Fore.RED+Style.BRIGHT}[ Failed to Get User Info ]{Style.RESET_ALL}")
+            self.log(
+                f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
+                f"{Fore.WHITE + Style.BRIGHT} ID {user_id} {Style.RESET_ALL}"
+                f"{Fore.RED + Style.BRIGHT}Data Is None{Style.RESET_ALL}"
+                f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
+            )
 
     def main(self):
         try:
@@ -489,13 +478,14 @@ class WigwamDrum:
                     f"{Fore.GREEN + Style.BRIGHT}Account's Total: {Style.RESET_ALL}"
                     f"{Fore.WHITE + Style.BRIGHT}{len(queries)}{Style.RESET_ALL}"
                 )
-                self.log(f"{Fore.CYAN + Style.BRIGHT}-----------------------------------------------------------------------{Style.RESET_ALL}")
+                self.log(f"{Fore.CYAN + Style.BRIGHT}-{Style.RESET_ALL}"*75)
 
                 for query in queries:
                     query = query.strip()
                     if query:
                         self.process_query(query)
-                        self.log(f"{Fore.CYAN + Style.BRIGHT}-----------------------------------------------------------------------{Style.RESET_ALL}")
+                        self.log(f"{Fore.CYAN + Style.BRIGHT}-{Style.RESET_ALL}"*75)
+                        time.sleep(3)
 
                 seconds = 1800
                 while seconds > 0:
