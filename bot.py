@@ -63,7 +63,7 @@ class WigwamDrum:
         else:
             raise ValueError("User data not found in query.")
 
-    def get_user_info(self, query: str, user_id: str):
+    def get_user_info(self, query: str, user_id: int):
         url = 'https://drumapi.wigwam.app/api/getUserInfo'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id, "platfrom":"tdesktop"})
         self.headers.update({
@@ -78,7 +78,7 @@ class WigwamDrum:
         else:
             return None
         
-    def start_farm(self, query: str, user_id: str):
+    def start_farm(self, query: str, user_id: int):
         url = 'https://drumapi.wigwam.app/api/gameplay/startFarm'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
         self.headers.update({
@@ -92,7 +92,7 @@ class WigwamDrum:
         else:
             return status['data']
         
-    def claim_farm(self, query: str, user_id: str):
+    def claim_farm(self, query: str, user_id: int):
         url = 'https://drumapi.wigwam.app/api/gameplay/claimFarm'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
         self.headers.update({
@@ -108,7 +108,7 @@ class WigwamDrum:
         else:
             return status['data']
         
-    def claim_children(self, query: str, user_id: str):
+    def claim_children(self, query: str, user_id: int):
         url = 'https://drumapi.wigwam.app/api/claimFromChildren'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
         self.headers.update({
@@ -125,7 +125,7 @@ class WigwamDrum:
         else:
             return None
         
-    def claim_taps(self, query: str, user_id: str, taps: int, amount: int):
+    def claim_taps(self, query: str, user_id: int, taps: int, amount: int):
         url = 'https://drumapi.wigwam.app/api/claimTaps'
         data = json.dumps({"authData":query, "data":{"taps":taps, "amount":amount}, "devAuthData":user_id})
         self.headers.update({
@@ -142,7 +142,7 @@ class WigwamDrum:
         else:
             return None
         
-    def start_tasks(self, query: str, user_id: str, task_id: str):
+    def start_tasks(self, query: str, user_id: int, task_id: str):
         url = 'https://drumapi.wigwam.app/api/startTask'
         data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
         self.headers.update({
@@ -159,7 +159,7 @@ class WigwamDrum:
         else:
             return None
         
-    def check_tasks(self, query: str, user_id: str, task_id: str):
+    def check_tasks(self, query: str, user_id: int, task_id: str):
         url = 'https://drumapi.wigwam.app/api/checkTask'
         data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
         self.headers.update({
@@ -176,7 +176,7 @@ class WigwamDrum:
         else:
             return None
         
-    def claim_tasks(self, query: str, user_id: str, task_id: str):
+    def claim_tasks(self, query: str, user_id: int, task_id: str):
         url = 'https://drumapi.wigwam.app/api/claimTask'
         data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
         self.headers.update({
@@ -192,8 +192,47 @@ class WigwamDrum:
                 return None
         else:
             return None
+        
+    def upgarde_skill(self, query: str, user_id: str, skill_id: str):
+        url = 'https://drumapi.wigwam.app/api/gameplay/upgradeSkill'
+        data = json.dumps({"authData":query, "data":{"skillId":skill_id}, "devAuthData":user_id})
+        self.headers.update({
+            'Content-Type': 'application/json'
+        })
+
+        response = self.session.post(url, headers=self.headers, data=data)
+        status = response.json()
+        if response.status_code == 200:
+            return status
+        else:
+            return None
+        
+    def upgarde_game_level(self, query: str, user_id: str):
+        url = 'https://drumapi.wigwam.app/api/gameplay/upgradeGameLevel'
+        data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
+        self.headers.update({
+            'Content-Type': 'application/json'
+        })
+
+        response = self.session.post(url, headers=self.headers, data=data)
+        status = response.json()
+        if response.status_code == 200:
+            return status
+        else:
+            return None
+        
+    def question(self):
+        while True:
+            upgrade_level = input("Upgrade Skill and Display Game Level? [y/n] -> ").strip().lower()
+            if upgrade_level in ["y", "n"]:
+                upgrade_level = upgrade_level == "y"
+                break
+            else:
+                print(f"{Fore.RED+Style.BRIGHT}Invalid Input.{Fore.WHITE+Style.BRIGHT} Choose 'y' to upgrade or 'n' to skip.{Style.RESET_ALL}")
+
+        return upgrade_level
     
-    def process_query(self, query: str):
+    def process_query(self, query: str, upgrade_level: bool):
 
         user_id = self.load_data(query)
 
@@ -346,6 +385,109 @@ class WigwamDrum:
                 )
             time.sleep(1)
 
+            if upgrade_level:
+                skills = user_info["displaySkills"]
+                if skills:
+                    for skill_id, skill_info in skills.items():
+                        balance = float(user_info["balance"])
+                        cost = skill_info["nextLevelUpgradeCost"]
+                        level = skill_info["level"]
+
+                        if balance >= cost:
+                            level += 1
+                            upgrade_skill = self.upgarde_skill(query, user_id, skill_id)
+                            if upgrade_skill and upgrade_skill["message"] == "Skill upgraded":
+                                balance -= cost
+                                self.log(
+                                    f"{Fore.MAGENTA+Style.BRIGHT}[ Skill{Style.RESET_ALL}"
+                                    f"{Fore.WHITE+Style.BRIGHT} {skill_info['name']} {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
+                                    f"{Fore.WHITE+Style.BRIGHT} Level {level} {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
+                                    f"{Fore.GREEN+Style.BRIGHT} Is Upgraded {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Cost{Style.RESET_ALL}"
+                                    f"{Fore.WHITE+Style.BRIGHT} {cost} {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                                )
+                            else:
+                                self.log(
+                                    f"{Fore.MAGENTA+Style.BRIGHT}[ Skill{Style.RESET_ALL}"
+                                    f"{Fore.WHITE+Style.BRIGHT} {skill_info['name']} {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
+                                    f"{Fore.WHITE+Style.BRIGHT} Level {level} {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
+                                    f"{Fore.YELLOW+Style.BRIGHT} Isn't Upgarded {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                                )
+
+                        if balance < cost:
+                            self.log(
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Skill{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} {skill_info['name']} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} Level {level} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
+                                f"{Fore.YELLOW+Style.BRIGHT} Balance Not Enough {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                            )
+
+                    time.sleep(1)
+                            
+                    display_game = user_info["displayGameLevel"]
+                    list_display = user_info['displayGameLevels']
+                    if display_game:
+                        upgrade_game = self.upgarde_game_level(query, user_id)
+                        if upgrade_game and upgrade_game['message'] == 'Game level upgraded':
+                            self.log(
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Game Level{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} {upgrade_game['toUpdate']['displayGameLevel']['name']} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} Level {upgrade_game['toUpdate']['displayGameLevel']['level']} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
+                                f"{Fore.GREEN+Style.BRIGHT} Is Upgraded {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                            )
+                        else:
+                            current_index = next((index for (index, d) in enumerate(list_display) if d["level"] == display_game["level"]), None)
+                            if current_index is not None and current_index + 1 < len(list_display):
+                                next_level = list_display[current_index + 1]
+                                next_name = next_level["name"]
+                                next_level_num = next_level["level"]
+                            else:
+                                next_name = display_game["name"]
+                                next_level_num = display_game["level"]
+
+                            self.log(
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Game Level{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} {next_name} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} Level {next_level_num} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
+                                f"{Fore.YELLOW+Style.BRIGHT} Not Eligible {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                            )
+
+                    else:
+                        self.log(
+                            f"{Fore.MAGENTA + Style.BRIGHT}[ Display Game{Style.RESET_ALL}"
+                            f"{Fore.RED + Style.BRIGHT} Data Is None {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                        )
+
+                else:
+                    self.log(
+                        f"{Fore.MAGENTA + Style.BRIGHT}[ Display Skill{Style.RESET_ALL}"
+                        f"{Fore.RED + Style.BRIGHT} Data Is None {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                    )
+            else:
+                self.log(
+                    f"{Fore.MAGENTA + Style.BRIGHT}[ Display Skill{Style.RESET_ALL}"
+                    f"{Fore.YELLOW + Style.BRIGHT} Upgrade Skipped {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                )
+            time.sleep(1)
+
             tasks = user_info['tasks']
             if tasks:
                 for task_id, task_info in tasks.items():
@@ -478,6 +620,8 @@ class WigwamDrum:
             with open('query.txt', 'r') as file:
                 queries = [line.strip() for line in file if line.strip()]
 
+            upgrade_level = self.question()
+
             while True:
                 self.clear_terminal()
                 self.welcome()
@@ -490,7 +634,7 @@ class WigwamDrum:
                 for query in queries:
                     query = query.strip()
                     if query:
-                        self.process_query(query)
+                        self.process_query(query, upgrade_level)
                         self.log(f"{Fore.CYAN + Style.BRIGHT}-{Style.RESET_ALL}"*75)
                         time.sleep(3)
 
