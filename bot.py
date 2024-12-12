@@ -1,17 +1,18 @@
-import requests
-import json
-import os
-import urllib.parse
+from aiohttp import (
+    ClientResponseError,
+    ClientSession,
+    ClientTimeout
+)
 from colorama import *
-from datetime import datetime, timedelta
-import time
-import pytz
+from urllib.parse import parse_qs, unquote
+from datetime import datetime, timedelta, timezone
+from fake_useragent import FakeUserAgent
+import asyncio, os, json, pytz
 
 wib = pytz.timezone('Asia/Jakarta')
 
 class WigwamDrum:
     def __init__(self) -> None:
-        self.session = requests.Session()
         self.headers = {
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -23,7 +24,7 @@ class WigwamDrum:
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-site',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0'
+            'User-Agent': FakeUserAgent().random
         }
 
     def clear_terminal(self):
@@ -52,175 +53,326 @@ class WigwamDrum:
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
 
     def load_data(self, query: str):
-        query_params = urllib.parse.parse_qs(query)
+        query_params = parse_qs(query)
         query = query_params.get('user', [None])[0]
 
         if query:
-            user_data_json = urllib.parse.unquote(query)
+            user_data_json = unquote(query)
             user_data = json.loads(user_data_json)
             user_id = user_data['id']
             return user_id
         else:
             raise ValueError("User data not found in query.")
-
-    def get_user_info(self, query: str, user_id: int):
+        
+    async def user_data(self, query: str, user_id: int, retries=5):
         url = 'https://drumapi.wigwam.app/api/getUserInfo'
-        data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id, "platfrom":"tdesktop"})
-        self.headers.update({
+        data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id, "platfrom":"android"})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
             'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        response.raise_for_status()
-        status = response.json()
-        if status['status']:
-            return status['data']
-        else:
-            return None
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
         
-    def start_farm(self, query: str, user_id: int):
-        url = 'https://drumapi.wigwam.app/api/gameplay/startFarm'
+    async def tribe_data(self, query: str, user_id: int, retries=5):
+        url = 'https://drumapi.wigwam.app/api/getChildren'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
-        self.headers.update({
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
             'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if status['status'] == 'error':
-            return None
-        else:
-            return status['data']
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
         
-    def claim_farm(self, query: str, user_id: int):
-        url = 'https://drumapi.wigwam.app/api/gameplay/claimFarm'
-        data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
-        self.headers.update({
-            'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if status['status'] == 'error':
-            reason = status['data']['reason']
-            if reason in ['Farm is not started', 'Mining era is not over']:
-                return None
-        else:
-            return status['data']
-        
-    def claim_children(self, query: str, user_id: int):
+    async def claim_tribe(self, query: str, user_id: int, retries=5):
         url = 'https://drumapi.wigwam.app/api/claimFromChildren'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
-        self.headers.update({
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
             'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if response.status_code == 200:
-            if status['status']:
-                return status['data']
-            else:
-                return None
-        else:
-            return None
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
         
-    def claim_taps(self, query: str, user_id: int, taps: int, amount: int):
+    async def start_farm(self, query: str, user_id: int, retries=5):
+        url = 'https://drumapi.wigwam.app/api/gameplay/startFarm'
+        data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
+        
+    async def claim_farm(self, query: str, user_id: int, retries=5):
+        url = 'https://drumapi.wigwam.app/api/gameplay/claimFarm'
+        data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
+        
+    async def claim_taps(self, query: str, user_id: int, taps: int, amount: int, retries=5):
         url = 'https://drumapi.wigwam.app/api/claimTaps'
         data = json.dumps({"authData":query, "data":{"taps":taps, "amount":amount}, "devAuthData":user_id})
-        self.headers.update({
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
             'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if response.status_code == 200:
-            if status['status'] == 'ok':
-                return status['data']
-            else:
-                return None
-        else:
-            return None
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
         
-    def start_tasks(self, query: str, user_id: int, task_id: str):
-        url = 'https://drumapi.wigwam.app/api/startTask'
-        data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
-        self.headers.update({
-            'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if response.status_code == 200:
-            if status['status'] == 'ok':
-                return status['data']
-            else:
-                return None
-        else:
-            return None
-        
-    def check_tasks(self, query: str, user_id: int, task_id: str):
-        url = 'https://drumapi.wigwam.app/api/checkTask'
-        data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
-        self.headers.update({
-            'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if response.status_code == 200:
-            if status['status'] == 'ok':
-                return status['data']
-            else:
-                return None
-        else:
-            return None
-        
-    def claim_tasks(self, query: str, user_id: int, task_id: str):
-        url = 'https://drumapi.wigwam.app/api/claimTask'
-        data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
-        self.headers.update({
-            'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if response.status_code == 200:
-            if status['status'] == 'ok':
-                return status['data']
-            else:
-                return None
-        else:
-            return None
-        
-    def upgarde_skill(self, query: str, user_id: str, skill_id: str):
+    async def upgrade_skills(self, query: str, user_id: int, skill_id: str, retries=5):
         url = 'https://drumapi.wigwam.app/api/gameplay/upgradeSkill'
         data = json.dumps({"authData":query, "data":{"skillId":skill_id}, "devAuthData":user_id})
-        self.headers.update({
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
             'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if response.status_code == 200:
-            return status
-        else:
-            return None
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
         
-    def upgarde_game_level(self, query: str, user_id: str):
+    async def upgrade_game_levels(self, query: str, user_id: int, retries=5):
         url = 'https://drumapi.wigwam.app/api/gameplay/upgradeGameLevel'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
-        self.headers.update({
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
             'Content-Type': 'application/json'
-        })
-
-        response = self.session.post(url, headers=self.headers, data=data)
-        status = response.json()
-        if response.status_code == 200:
-            return status
-        else:
-            return None
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        if response.status == 500:
+                            return
+                        
+                        response.raise_for_status()
+                        return await response.json()
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
         
+    async def start_tasks(self, query: str, user_id: int, task_id: str, retries=5):
+        url = 'https://drumapi.wigwam.app/api/startTask'
+        data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
+        
+    async def check_tasks(self, query: str, user_id: int, task_id: str, retries=5):
+        url = 'https://drumapi.wigwam.app/api/checkTask'
+        data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
+        
+    async def claim_tasks(self, query: str, user_id: int, task_id: str, retries=5):
+        url = 'https://drumapi.wigwam.app/api/claimTask'
+        data = json.dumps({"authData":query, "data":{"taskId":task_id}, "devAuthData":user_id})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
+
     def question(self):
         while True:
             upgrade_level = input("Upgrade Skill and Display Game Level? [y/n] -> ").strip().lower()
@@ -231,176 +383,210 @@ class WigwamDrum:
                 print(f"{Fore.RED+Style.BRIGHT}Invalid Input.{Fore.WHITE+Style.BRIGHT} Choose 'y' to upgrade or 'n' to skip.{Style.RESET_ALL}")
 
         return upgrade_level
-    
-    def process_query(self, query: str, upgrade_level: bool):
-
+        
+    async def process_query(self, query: str, upgrade_level: bool):
         user_id = self.load_data(query)
+        user = await self.user_data(query, user_id)
+        if not user:
+            self.log(
+                f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
+                f"{Fore.RED + Style.BRIGHT} Query Id Isn't Valid {Style.RESET_ALL}"
+                f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+            )
+            return
 
-        user_info = self.get_user_info(query, user_id)
-        if user_info:
+        if user:
             self.log(
                 f"{Fore.MAGENTA+Style.BRIGHT}[ Account{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {user_info['first_name']} {Style.RESET_ALL}"
+                f"{Fore.WHITE+Style.BRIGHT} {user['first_name']} {Style.RESET_ALL}"
                 f"{Fore.MAGENTA+Style.BRIGHT}] [ Balance{Style.RESET_ALL}"
-                f"{Fore.WHITE+Style.BRIGHT} {user_info['balance']} {Style.RESET_ALL}"
+                f"{Fore.WHITE+Style.BRIGHT} {user['balance']} DRUM {Style.RESET_ALL}"
                 f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
             )
-            time.sleep(1)
+            await asyncio.sleep(1)
 
-            farm_started_at = user_info.get("farmStartedAt", None)
-    
-            if not farm_started_at:
-                start_farm = self.start_farm(query, user_id)
-                if start_farm:
+            tribe = await self.tribe_data(query, user_id)
+            if tribe:
+                rewards = float(tribe['totalRewardsToClaim'])
+                if rewards > 0:
+                    claim = await self.claim_tribe(query, user_id)
+                    if claim:
+                        self.log(
+                            f"{Fore.MAGENTA+Style.BRIGHT}[ Tribe{Style.RESET_ALL}"
+                            f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA+Style.BRIGHT}] [ Reward{Style.RESET_ALL}"
+                            f"{Fore.WHITE+Style.BRIGHT} {rewards} DRUM {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                        )
+                    else:
+                        self.log(
+                            f"{Fore.MAGENTA+Style.BRIGHT}[ Tribe{Style.RESET_ALL}"
+                            f"{Fore.RED+Style.BRIGHT} Isn't Claimed {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                        )
+                else:
+                    self.log(
+                        f"{Fore.MAGENTA+Style.BRIGHT}[ Tribe{Style.RESET_ALL}"
+                        f"{Fore.YELLOW+Style.BRIGHT} No Available Reward to Claim {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                    )
+            else:
+                self.log(
+                    f"{Fore.MAGENTA+Style.BRIGHT}[ Tribe{Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Data Is None {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                )
+            await asyncio.sleep(1)
+
+            is_started = user.get('farmStartedAt', None)
+            if is_started is None:
+                start = await self.start_farm(query, user_id)
+                if start:
+                    start_time = datetime.strptime(start['farmStartedAt'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+                    end_time_utc = start_time + timedelta(hours=4)
+                    end_time_wib = end_time_utc.astimezone(wib).strftime('%x %X %Z')
+
                     self.log(
                         f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
                         f"{Fore.GREEN+Style.BRIGHT} Is Started {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA+Style.BRIGHT}] [ Next Claim at{Style.RESET_ALL} N/A {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA+Style.BRIGHT}] [ Claim at{Style.RESET_ALL}"
+                        f"{Fore.WHITE+Style.BRIGHT} {end_time_wib} {Style.RESET_ALL}"
                         f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                     )
                 else:
                     self.log(
                         f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
-                        f"{Fore.YELLOW+Style.BRIGHT} Failed to Start {Style.RESET_ALL}"
+                        f"{Fore.RED+Style.BRIGHT} Isn't Started {Style.RESET_ALL}"
                         f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                     )
-                return
+                await asyncio.sleep(1)
 
-            farm_started_time_utc = datetime.fromisoformat(farm_started_at[:-1])
-            farm_started_time_wib = farm_started_time_utc.replace(tzinfo=pytz.utc).astimezone(wib)
-            next_claim_time_wib = farm_started_time_wib + timedelta(hours=4)
-            next_claim_formatted = next_claim_time_wib.strftime('%m/%d/%y %H:%M:%S WIB')
-
-            claim_farm = self.claim_farm(query, user_id)
-            if claim_farm:
-                self.log(
-                    f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
-                    f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Reward{Style.RESET_ALL}"
-                    f"{Fore.WHITE+Style.BRIGHT} {claim_farm['claimedBalance']} Points {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
-                )
             else:
-                self.log(
-                    f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} Not Time to Claim {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
-                )
-            time.sleep(1)
+                now = datetime.utcnow().replace(tzinfo=timezone.utc)
+                start_time = datetime.strptime(is_started, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+                end_time_utc = start_time + timedelta(hours=4)
+                end_time_wib = end_time_utc.astimezone(wib).strftime('%x %X %Z')
 
-            start_farm = self.start_farm(query, user_id)
-            if start_farm:
-                self.log(
-                    f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
-                    f"{Fore.GREEN+Style.BRIGHT} Is Started {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Next Claim at{Style.RESET_ALL}"
-                    f"{Fore.WHITE+Style.BRIGHT} {next_claim_formatted} {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
-                )
-            else:
-                self.log(
-                    f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} Is Already Started {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Next Claim at{Style.RESET_ALL}"
-                    f"{Fore.WHITE+Style.BRIGHT} {next_claim_formatted} {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
-                )
-            time.sleep(1)
+                if now >= end_time_utc:
+                    claim = await self.claim_farm(query, user_id)
+                    if claim:
+                        self.log(
+                            f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
+                            f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA+Style.BRIGHT}] [ Reward{Style.RESET_ALL}"
+                            f"{Fore.WHITE+Style.BRIGHT} {claim['claimedBalance']} DRUM {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                        )
+                        await asyncio.sleep(1)
 
-            claim_children = self.claim_children(query, user_id)
-            if claim_children:
-                rewards = float(claim_children['claimedBalance'])
-                if rewards > 0:
-                    self.log(
-                        f"{Fore.MAGENTA+Style.BRIGHT}[ Refferal{Style.RESET_ALL}"
-                        f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA+Style.BRIGHT}] [ Reward{Style.RESET_ALL}"
-                        f"{Fore.WHITE+Style.BRIGHT} {rewards} {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA+Style.BRIGHT}Points ]{Style.RESET_ALL}"
-                    )
+                        start = await self.start_farm(query, user_id)
+                        if start:
+                            start_time = datetime.strptime(start['farmStartedAt'], "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+                            end_time_utc = start_time + timedelta(hours=4)
+                            end_time_wib = end_time_utc.astimezone(wib).strftime('%x %X %Z')
+
+                            self.log(
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
+                                f"{Fore.GREEN+Style.BRIGHT} Is Started {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}] [ Claim at{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} {end_time_wib} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                            )
+                        else:
+                            self.log(
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
+                                f"{Fore.RED+Style.BRIGHT} Isn't Started {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                            )
+                    else:
+                        self.log(
+                            f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
+                            f"{Fore.RED+Style.BRIGHT} Isn't Claimed {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                        )
+                    await asyncio.sleep(1)
+
                 else:
                     self.log(
-                        f"{Fore.MAGENTA+Style.BRIGHT}[ Refferal{Style.RESET_ALL}"
-                        f"{Fore.YELLOW+Style.BRIGHT} No Available Rewards to Claim {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA+Style.BRIGHT}[ Farming{Style.RESET_ALL}"
+                        f"{Fore.YELLOW+Style.BRIGHT} Not Time to CLaim {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA+Style.BRIGHT}] [ Claim at{Style.RESET_ALL}"
+                        f"{Fore.WHITE+Style.BRIGHT} {end_time_wib} {Style.RESET_ALL}"
                         f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                     )
-            else:
-                self.log(
-                    f"{Fore.MAGENTA+Style.BRIGHT}[ Refferal{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} You Don't Have Any Refferal {Style.RESET_ALL}"
-                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
-                )
-            time.sleep(1)
+                await asyncio.sleep(1)
 
-            tap_interval = user_info['tapIntervalMinutes']
-            available_taps = user_info['availableTaps']
-
-            if available_taps > 0:
+            amount = user['availableTaps']
+            if amount > 0:
                 self.log(
                     f"{Fore.MAGENTA+Style.BRIGHT}[ Tap Tap{Style.RESET_ALL}"
                     f"{Fore.GREEN+Style.BRIGHT} Is Started {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                 )
+                await asyncio.sleep(1)
 
-                for remaining in range(available_taps, 0, -1):
-                    print(
-                        f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
-                        f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA + Style.BRIGHT}[ Wait for{Style.RESET_ALL}"
-                        f"{Fore.YELLOW + Style.BRIGHT} {remaining} {Style.RESET_ALL}"
-                        f"{Fore.WHITE + Style.BRIGHT}Seconds to Claim Reward{Style.RESET_ALL}"
-                        f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}   ",
-                        end="\r",
-                        flush=True
-                    )
-                    time.sleep(1)
-
-                total_amount = 0
-
-                while available_taps > 0:
-                    taps = min(tap_interval, available_taps)
-                    amount = available_taps
-
-                    tap_tap = self.claim_taps(query, user_id, taps, amount)
-
+                taps = 1
+                rewards = 0
+                while amount >= taps:
+                    tap_tap = await self.claim_taps(query, user_id, taps, amount)
                     if tap_tap:
-                        total_amount += amount
-                        available_taps -= taps
+                        amount -= taps
+                        rewards += amount
+                        print(
+                            f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+                            f"{Fore.MAGENTA + Style.BRIGHT}[ Wait for{Style.RESET_ALL}"
+                            f"{Fore.YELLOW + Style.BRIGHT} {amount} {Style.RESET_ALL}"
+                            f"{Fore.WHITE + Style.BRIGHT}Seconds to Claim Reward{Style.RESET_ALL}"
+                            f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}   ",
+                            end="\r",
+                            flush=True
+                        )
                     else:
                         break
 
-                if available_taps == 0:
-                    self.log(
-                        f"{Fore.MAGENTA+Style.BRIGHT}[ Tap Tap{Style.RESET_ALL}"
-                        f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA+Style.BRIGHT}] [ Reward{Style.RESET_ALL}"
-                        f"{Fore.WHITE+Style.BRIGHT} {total_amount} Points {Style.RESET_ALL}"
-                        f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}          "
-                    )
+                    await asyncio.sleep(1.5)
+
+                self.log(
+                    f"{Fore.MAGENTA+Style.BRIGHT}[ Tap Tap{Style.RESET_ALL}"
+                    f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Reward{Style.RESET_ALL}"
+                    f"{Fore.WHITE+Style.BRIGHT} {rewards} DRUM {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}          "
+                )
+
             else:
                 self.log(
                     f"{Fore.MAGENTA+Style.BRIGHT}[ Tap Tap{Style.RESET_ALL}"
-                    f"{Fore.YELLOW+Style.BRIGHT} Is Already Claimed {Style.RESET_ALL}"
+                    f"{Fore.YELLOW+Style.BRIGHT} No Available Now {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                 )
-            time.sleep(1)
+            await asyncio.sleep(1)
 
             if upgrade_level:
-                skills = user_info["displaySkills"]
+                user = await self.user_data(query, user_id)
+                if not user:
+                    self.log(
+                        f"{Fore.MAGENTA + Style.BRIGHT}[ Skill Display{Style.RESET_ALL}"
+                        f"{Fore.RED + Style.BRIGHT} Failed to Retrieve User Balance {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                    )
+                    return
+                
+                skills = user["displaySkills"]
                 if skills:
-                    for skill_id, skill_info in skills.items():
-                        balance = float(user_info["balance"])
-                        cost = skill_info["nextLevelUpgradeCost"]
-                        level = skill_info["level"]
+                    balance = float(user["balance"])
+                    for skill_id, details in skills.items():
+                        cost = details["nextLevelUpgradeCost"]
+                        level = details["level"] + 1
 
                         if balance >= cost:
-                            level += 1
-                            upgrade_skill = self.upgarde_skill(query, user_id, skill_id)
+                            upgrade_skill = await self.upgrade_skills(query, user_id, skill_id)
                             if upgrade_skill and upgrade_skill["message"] == "Skill upgraded":
                                 balance -= cost
                                 self.log(
-                                    f"{Fore.MAGENTA+Style.BRIGHT}[ Skill{Style.RESET_ALL}"
-                                    f"{Fore.WHITE+Style.BRIGHT} {skill_info['name']} {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}[ Skill Display{Style.RESET_ALL}"
+                                    f"{Fore.WHITE+Style.BRIGHT} {details['name']} {Style.RESET_ALL}"
                                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                                     f"{Fore.WHITE+Style.BRIGHT} Level {level} {Style.RESET_ALL}"
                                     f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
@@ -411,35 +597,33 @@ class WigwamDrum:
                                 )
                             else:
                                 self.log(
-                                    f"{Fore.MAGENTA+Style.BRIGHT}[ Skill{Style.RESET_ALL}"
-                                    f"{Fore.WHITE+Style.BRIGHT} {skill_info['name']} {Style.RESET_ALL}"
+                                    f"{Fore.MAGENTA+Style.BRIGHT}[ Skill Display{Style.RESET_ALL}"
+                                    f"{Fore.WHITE+Style.BRIGHT} {details['name']} {Style.RESET_ALL}"
                                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                                     f"{Fore.WHITE+Style.BRIGHT} Level {level} {Style.RESET_ALL}"
                                     f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
-                                    f"{Fore.YELLOW+Style.BRIGHT} Isn't Upgarded {Style.RESET_ALL}"
+                                    f"{Fore.RED+Style.BRIGHT} Isn't Upgarded {Style.RESET_ALL}"
                                     f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                                 )
 
-                        if balance < cost:
+                        else:
                             self.log(
-                                f"{Fore.MAGENTA+Style.BRIGHT}[ Skill{Style.RESET_ALL}"
-                                f"{Fore.WHITE+Style.BRIGHT} {skill_info['name']} {Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Skill Display{Style.RESET_ALL}"
+                                f"{Fore.WHITE+Style.BRIGHT} {details['name']} {Style.RESET_ALL}"
                                 f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                                 f"{Fore.WHITE+Style.BRIGHT} Level {level} {Style.RESET_ALL}"
                                 f"{Fore.MAGENTA+Style.BRIGHT}] [ Status{Style.RESET_ALL}"
                                 f"{Fore.YELLOW+Style.BRIGHT} Balance Not Enough {Style.RESET_ALL}"
                                 f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
                             )
-
-                    time.sleep(1)
                             
-                    display_game = user_info["displayGameLevel"]
-                    list_display = user_info['displayGameLevels']
+                    display_game = user["displayGameLevel"]
+                    list_display = user['displayGameLevels']
                     if display_game:
-                        upgrade_game = self.upgarde_game_level(query, user_id)
+                        upgrade_game = await self.upgrade_game_levels(query, user_id)
                         if upgrade_game and upgrade_game['message'] == 'Game level upgraded':
                             self.log(
-                                f"{Fore.MAGENTA+Style.BRIGHT}[ Game Level{Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Game Display{Style.RESET_ALL}"
                                 f"{Fore.WHITE+Style.BRIGHT} {upgrade_game['toUpdate']['displayGameLevel']['name']} {Style.RESET_ALL}"
                                 f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                                 f"{Fore.WHITE+Style.BRIGHT} Level {upgrade_game['toUpdate']['displayGameLevel']['level']} {Style.RESET_ALL}"
@@ -458,7 +642,7 @@ class WigwamDrum:
                                 next_level_num = display_game["level"]
 
                             self.log(
-                                f"{Fore.MAGENTA+Style.BRIGHT}[ Game Level{Style.RESET_ALL}"
+                                f"{Fore.MAGENTA+Style.BRIGHT}[ Game Display{Style.RESET_ALL}"
                                 f"{Fore.WHITE+Style.BRIGHT} {next_name} {Style.RESET_ALL}"
                                 f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                                 f"{Fore.WHITE+Style.BRIGHT} Level {next_level_num} {Style.RESET_ALL}"
@@ -469,27 +653,28 @@ class WigwamDrum:
 
                     else:
                         self.log(
-                            f"{Fore.MAGENTA + Style.BRIGHT}[ Display Game{Style.RESET_ALL}"
+                            f"{Fore.MAGENTA + Style.BRIGHT}[ Game Display{Style.RESET_ALL}"
                             f"{Fore.RED + Style.BRIGHT} Data Is None {Style.RESET_ALL}"
                             f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
                         )
 
                 else:
                     self.log(
-                        f"{Fore.MAGENTA + Style.BRIGHT}[ Display Skill{Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT}[ Skill Display{Style.RESET_ALL}"
                         f"{Fore.RED + Style.BRIGHT} Data Is None {Style.RESET_ALL}"
                         f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
                     )
             else:
                 self.log(
-                    f"{Fore.MAGENTA + Style.BRIGHT}[ Display Skill{Style.RESET_ALL}"
+                    f"{Fore.MAGENTA + Style.BRIGHT}[ Skill Display{Style.RESET_ALL}"
                     f"{Fore.YELLOW + Style.BRIGHT} Upgrade Skipped {Style.RESET_ALL}"
                     f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
                 )
-            time.sleep(1)
+            await asyncio.sleep(1)
 
-            tasks = user_info['tasks']
+            tasks = user['tasks']
             if tasks:
+                completed = False
                 for task_id, task_info in tasks.items():
                     status_task = task_info['state']
 
@@ -497,7 +682,7 @@ class WigwamDrum:
                         continue
 
                     if status_task == "NONE":
-                        start = self.start_tasks(query, user_id, task_id)
+                        start = await self.start_tasks(query, user_id, task_id)
                         if start and start['state'] == "ReadyToCheck":
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
@@ -505,8 +690,9 @@ class WigwamDrum:
                                 f"{Fore.GREEN + Style.BRIGHT}Is Started{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
+                            await asyncio.sleep(1)
 
-                            check = self.check_tasks(query, user_id, task_id)
+                            check = await self.check_tasks(query, user_id, task_id)
                             if check and check['state'] == "ReadyToClaim":
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
@@ -514,8 +700,9 @@ class WigwamDrum:
                                     f"{Fore.GREEN + Style.BRIGHT}Is Checked{Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                 )
+                                await asyncio.sleep(1)
                             
-                                claim = self.claim_tasks(query, user_id, task_id)
+                                claim = await self.claim_tasks(query, user_id, task_id)
                                 if claim and claim['task']['state'] == "Claimed":
                                     self.log(
                                         f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
@@ -529,26 +716,29 @@ class WigwamDrum:
                                     self.log(
                                         f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
                                         f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
-                                        f"{Fore.YELLOW + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
+                                        f"{Fore.RED + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
                                         f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                     )
+
                             else:
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
                                     f"{Fore.WHITE + Style.BRIGHT} {check['title']} {Style.RESET_ALL}"
-                                    f"{Fore.YELLOW + Style.BRIGHT}Isn't Checked{Style.RESET_ALL}"
+                                    f"{Fore.RED + Style.BRIGHT}Isn't Checked{Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                 )
+                                
                         else:
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
                                 f"{Fore.WHITE + Style.BRIGHT} {start['title']} {Style.RESET_ALL}"
-                                f"{Fore.YELLOW + Style.BRIGHT}Isn't Started{Style.RESET_ALL}"
+                                f"{Fore.RED + Style.BRIGHT}Isn't Started{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
+                        await asyncio.sleep(1)
 
                     elif status_task == "ReadyToCheck":
-                        check = self.check_tasks(query, user_id, task_id)
+                        check = await self.check_tasks(query, user_id, task_id)
                         if check and check['state'] == "ReadyToClaim":
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
@@ -556,8 +746,9 @@ class WigwamDrum:
                                 f"{Fore.GREEN + Style.BRIGHT}Is Checked{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
+                            await asyncio.sleep(1)
                             
-                            claim = self.claim_tasks(query, user_id, task_id)
+                            claim = await self.claim_tasks(query, user_id, task_id)
                             if claim and claim['task']['state'] == "Claimed":
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
@@ -571,19 +762,21 @@ class WigwamDrum:
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
                                     f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
-                                    f"{Fore.YELLOW + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
+                                    f"{Fore.RED + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                 )
+
                         else:
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
                                 f"{Fore.WHITE + Style.BRIGHT} {check['title']} {Style.RESET_ALL}"
-                                f"{Fore.YELLOW + Style.BRIGHT}Isn't Checked{Style.RESET_ALL}"
+                                f"{Fore.RED + Style.BRIGHT}Isn't Checked{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
+                        await asyncio.sleep(1)
 
                     elif status_task == "ReadyToClaim":
-                        claim = self.claim_tasks(query, user_id, task_id)
+                        claim = await self.claim_tasks(query, user_id, task_id)
                         if claim and claim['task']['state'] == "Claimed":
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
@@ -597,9 +790,20 @@ class WigwamDrum:
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
                                 f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
-                                f"{Fore.YELLOW + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
+                                f"{Fore.RED + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
+                        await asyncio.sleep(1)
+
+                    else:
+                        completed = True
+
+                if completed:
+                    self.log(
+                        f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
+                        f"{Fore.GREEN + Style.BRIGHT} Is Completed {Style.RESET_ALL}"
+                        f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
+                    )
 
             else:
                 self.log(
@@ -607,15 +811,8 @@ class WigwamDrum:
                     f"{Fore.RED + Style.BRIGHT} Data Is None {Style.RESET_ALL}"
                     f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
                 )
-        else:
-            self.log(
-                f"{Fore.MAGENTA + Style.BRIGHT}[ Account{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} ID {user_id} {Style.RESET_ALL}"
-                f"{Fore.RED + Style.BRIGHT}Data Is None{Style.RESET_ALL}"
-                f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
-            )
-
-    def main(self):
+        
+    async def main(self):
         try:
             with open('query.txt', 'r') as file:
                 queries = [line.strip() for line in file if line.strip()]
@@ -634,9 +831,10 @@ class WigwamDrum:
                 for query in queries:
                     query = query.strip()
                     if query:
-                        self.process_query(query, upgrade_level)
+                        await self.process_query(query, upgrade_level)
                         self.log(f"{Fore.CYAN + Style.BRIGHT}-{Style.RESET_ALL}"*75)
-                        time.sleep(3)
+                        await asyncio.sleep(3)
+                        
 
                 seconds = 1800
                 while seconds > 0:
@@ -647,14 +845,22 @@ class WigwamDrum:
                         f"{Fore.CYAN+Style.BRIGHT}... ]{Style.RESET_ALL}",
                         end="\r"
                     )
-                    time.sleep(1)
+                    await asyncio.sleep(1)
                     seconds -= 1
 
-        except KeyboardInterrupt:
-            self.log(f"{Fore.RED + Style.BRIGHT}[ EXIT ] Wigwam Drum - BOT{Style.RESET_ALL}")
+        except FileNotFoundError:
+            self.log(f"{Fore.RED}File 'query.txt' tidak ditemukan.{Style.RESET_ALL}")
+            return
         except Exception as e:
-            self.log(f"{Fore.RED + Style.BRIGHT}An error occurred: {e}{Style.RESET_ALL}")
+            self.log(f"{Fore.RED+Style.BRIGHT}Error: {e}{Style.RESET_ALL}")
 
 if __name__ == "__main__":
-    wigwam = WigwamDrum()
-    wigwam.main()
+    try:
+        bot = WigwamDrum()
+        asyncio.run(bot.main())
+    except KeyboardInterrupt:
+        print(
+            f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
+            f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
+            f"{Fore.RED + Style.BRIGHT}[ EXIT ] Wigwam Drum - BOT{Style.RESET_ALL}",                                       
+        )
