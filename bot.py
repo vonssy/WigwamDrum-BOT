@@ -92,6 +92,36 @@ class WigwamDrum:
                 else:
                     return None
         
+    async def claim_checkin(self, query: str, user_id: int, retries=5):
+        url = 'https://drumapi.wigwam.app/api/gameplay/claimDailyBonus'
+        data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
+        headers = {
+            **self.headers,
+            'Content-Length': str(len(data)),
+            'Content-Type': 'application/json'
+        }
+        for attempt in range(retries):
+            try:
+                async with ClientSession(timeout=ClientTimeout(total=20)) as session:
+                    async with session.post(url=url, headers=headers, data=data) as response:
+                        if response.status == 500:
+                              return None
+                        response.raise_for_status()
+                        result = await response.json()
+                        return result['data']
+            except (Exception, ClientResponseError) as e:
+                if attempt < retries - 1:
+                    print(
+                        f"{Fore.RED + Style.BRIGHT}ERROR.{Style.RESET_ALL}"
+                        f"{Fore.YELLOW + Style.BRIGHT} Retrying.... {Style.RESET_ALL}"
+                        f"{Fore.WHITE + Style.BRIGHT}[{attempt+1}/{retries}]{Style.RESET_ALL}",
+                        end="\r",
+                        flush=True
+                    )
+                    await asyncio.sleep(3)
+                else:
+                    return None
+        
     async def tribe_data(self, query: str, user_id: int, retries=5):
         url = 'https://drumapi.wigwam.app/api/getChildren'
         data = json.dumps({"authData":query, "data":{}, "devAuthData":user_id})
@@ -403,6 +433,23 @@ class WigwamDrum:
                 f"{Fore.WHITE+Style.BRIGHT} {user['balance']} DRUM {Style.RESET_ALL}"
                 f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
             )
+            await asyncio.sleep(1)
+
+            check_in = await self.claim_checkin(query, user_id)
+            if check_in:
+                self.log(
+                    f"{Fore.MAGENTA+Style.BRIGHT}[ Check-In{Style.RESET_ALL}"
+                    f"{Fore.GREEN+Style.BRIGHT} Is Claimed {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA+Style.BRIGHT}] [ Balane{Style.RESET_ALL}"
+                    f"{Fore.WHITE+Style.BRIGHT} {check_in['balance']} DRUM {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                )
+            else:
+                self.log(
+                    f"{Fore.MAGENTA+Style.BRIGHT}[ Check-In{Style.RESET_ALL}"
+                    f"{Fore.YELLOW+Style.BRIGHT} Is Already Claimed {Style.RESET_ALL}"
+                    f"{Fore.MAGENTA+Style.BRIGHT}]{Style.RESET_ALL}"
+                )
             await asyncio.sleep(1)
 
             tribe = await self.tribe_data(query, user_id)
