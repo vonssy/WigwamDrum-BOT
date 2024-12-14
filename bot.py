@@ -724,6 +724,8 @@ class WigwamDrum:
                 completed = False
                 for task_id, task_info in tasks.items():
                     status_task = task_info['state']
+                    title = task_info['title']
+                    reward = task_info['reward']
 
                     if task_id == "watch_adsgram":
                         continue
@@ -733,7 +735,7 @@ class WigwamDrum:
                         if start and start['state'] == "ReadyToCheck":
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {start['title']} {Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                 f"{Fore.GREEN + Style.BRIGHT}Is Started{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
@@ -743,7 +745,7 @@ class WigwamDrum:
                             if check and check['state'] == "ReadyToClaim":
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                    f"{Fore.WHITE + Style.BRIGHT} {check['title']} {Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                     f"{Fore.GREEN + Style.BRIGHT}Is Checked{Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                 )
@@ -753,16 +755,16 @@ class WigwamDrum:
                                 if claim and claim['task']['state'] == "Claimed":
                                     self.log(
                                         f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                        f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
+                                        f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                         f"{Fore.GREEN + Style.BRIGHT}Is Claimed{Style.RESET_ALL}"
                                         f"{Fore.MAGENTA + Style.BRIGHT} ] [ Reward{Style.RESET_ALL}"
-                                        f"{Fore.WHITE + Style.BRIGHT} {claim['task']['reward']} {Style.RESET_ALL}"
+                                        f"{Fore.WHITE + Style.BRIGHT} {reward} {Style.RESET_ALL}"
                                         f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
                                     )
                                 else:
                                     self.log(
                                         f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                        f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
+                                        f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                         f"{Fore.RED + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
                                         f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                     )
@@ -770,7 +772,7 @@ class WigwamDrum:
                             else:
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                    f"{Fore.WHITE + Style.BRIGHT} {check['title']} {Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                     f"{Fore.RED + Style.BRIGHT}Isn't Checked{Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                 )
@@ -778,7 +780,7 @@ class WigwamDrum:
                         else:
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {start['title']} {Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                 f"{Fore.RED + Style.BRIGHT}Isn't Started{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
@@ -789,7 +791,7 @@ class WigwamDrum:
                         if check and check['state'] == "ReadyToClaim":
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {check['title']} {Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                 f"{Fore.GREEN + Style.BRIGHT}Is Checked{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
@@ -799,16 +801,16 @@ class WigwamDrum:
                             if claim and claim['task']['state'] == "Claimed":
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                    f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                     f"{Fore.GREEN + Style.BRIGHT}Is Claimed{Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT} ] [ Reward{Style.RESET_ALL}"
-                                    f"{Fore.WHITE + Style.BRIGHT} {claim['task']['reward']} {Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} {reward} {Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
                                 )
                             else:
                                 self.log(
                                     f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                    f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
+                                    f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                     f"{Fore.RED + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
                                     f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                                 )
@@ -816,7 +818,7 @@ class WigwamDrum:
                         else:
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {check['title']} {Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                 f"{Fore.RED + Style.BRIGHT}Isn't Checked{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
@@ -827,16 +829,16 @@ class WigwamDrum:
                         if claim and claim['task']['state'] == "Claimed":
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                 f"{Fore.GREEN + Style.BRIGHT}Is Claimed{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ] [ Reward{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {claim['task']['reward']} {Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} {reward} {Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT}]{Style.RESET_ALL}"
                             )
                         else:
                             self.log(
                                 f"{Fore.MAGENTA + Style.BRIGHT}[ Task{Style.RESET_ALL}"
-                                f"{Fore.WHITE + Style.BRIGHT} {claim['task']['title']} {Style.RESET_ALL}"
+                                f"{Fore.WHITE + Style.BRIGHT} {title} {Style.RESET_ALL}"
                                 f"{Fore.RED + Style.BRIGHT}Isn't Claimed{Style.RESET_ALL}"
                                 f"{Fore.MAGENTA + Style.BRIGHT} ]{Style.RESET_ALL}"
                             )
